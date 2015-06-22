@@ -128,7 +128,8 @@ namespace RemoteBlinky
             SendDirection(0);
             arduino.digitalWrite(dir_enable, PinState.LOW);
 
-            SetSpeed(0);
+            SetSpeed(Motor.Motor1, 0);
+            SetSpeed(Motor.Motor2, 0);
         }
 
         private void SendDirection(byte latch)
@@ -152,12 +153,9 @@ namespace RemoteBlinky
             arduino.digitalWrite(dir_latch, PinState.HIGH);
         }
 
-        private void SetSpeed(ushort speed)
+        private void SetSpeed(Motor motor, ushort speed)
         {
-            arduino.analogWrite(11, speed);
-            arduino.analogWrite(3, speed);
-            //arduino.analogWrite(6, speed);
-            //arduino.analogWrite(5, speed);
+            arduino.analogWrite((byte)motor, speed);
         }
 
         enum Direction
@@ -167,6 +165,9 @@ namespace RemoteBlinky
             Release,
         }
 
+        /// <summary>
+        /// Motor direction latch bits
+        /// </summary>
         enum MotorLatchBits
         {
             motor_1a = 2,
@@ -179,20 +180,16 @@ namespace RemoteBlinky
             motor_3b = 7,
         }
 
+        /// <summary>
+        /// PWM motor pins
+        /// </summary>
         enum Motor
         {
-            Motor1,
-            Motor2,
-            Motor3,
-            Motor4,
+            Motor1 = 11,
+            Motor2 = 3,
+            Motor3 = 6,
+            Motor4 = 5,
         }
-
-        /* pins for motors
-         * motor 1: 11
-         * motor 2: 3
-         * motor 3: 6
-         * motor 4: 5
-         */
 
         // Arduino pin names for interface to 74HCT595 latch
         byte dir_latch = 12;
@@ -202,47 +199,90 @@ namespace RemoteBlinky
 
         private void forward_click(object sender, RoutedEventArgs e)
         {
-            arduino.digitalWrite(13, PinState.HIGH);
-
+            SetSpeed(Motor.Motor1, drivespeed);
+            SetSpeed(Motor.Motor2, drivespeed);
             SetDirection(Motor.Motor1, Direction.Forward);
             SetDirection(Motor.Motor2, Direction.Forward);
             SendDirection(latchState);
-            SetSpeed(127);
+
+            arduino.digitalWrite(13, PinState.HIGH);
+
+            StartHaltTimer(drivems);
         }
 
         private void left_click(object sender, RoutedEventArgs e)
         {
+            SetSpeed(Motor.Motor1, turnspeed);
+            SetSpeed(Motor.Motor2, turnspeed);
             SetDirection(Motor.Motor1, Direction.Forward);
             SetDirection(Motor.Motor2, Direction.Backward);
             SendDirection(latchState);
-            SetSpeed(127);
+
             arduino.digitalWrite(13, PinState.HIGH);
+
+            StartHaltTimer(turnms);
         }
 
         private void stop_click(object sender, RoutedEventArgs e)
         {
+            SetSpeed(Motor.Motor1, 0);
+            SetSpeed(Motor.Motor2, 0);
             SetDirection(Motor.Motor1, Direction.Release);
             SetDirection(Motor.Motor2, Direction.Release);
-            SetSpeed(0);
+            SendDirection(this.latchState);
+
             arduino.digitalWrite(13, PinState.LOW);
         }
 
         private void right_click(object sender, RoutedEventArgs e)
         {
+            SetSpeed(Motor.Motor1, turnspeed);
+            SetSpeed(Motor.Motor2, turnspeed);
             SetDirection(Motor.Motor1, Direction.Backward);
             SetDirection(Motor.Motor2, Direction.Forward);
             SendDirection(latchState);
-            SetSpeed(127);
+
             arduino.digitalWrite(13, PinState.HIGH);
+
+            StartHaltTimer(turnms);
         }
 
         private void backwards_click(object sender, RoutedEventArgs e)
         {
+            SetSpeed(Motor.Motor1, drivespeed);
+            SetSpeed(Motor.Motor2, drivespeed);
             SetDirection(Motor.Motor1, Direction.Backward);
             SetDirection(Motor.Motor2, Direction.Backward);
             SendDirection(latchState);
-            SetSpeed(127);
+
             arduino.digitalWrite(13, PinState.HIGH);
+
+            StartHaltTimer(drivems);
+        }
+
+        const byte drivespeed = 255;
+        const int drivems = 10000;
+        const byte turnspeed = 255;
+        const int turnms = 300;
+
+        private DispatcherTimer timer;
+
+        private void StartHaltTimer(int ms)
+        {
+            if(this.timer != null)
+            {
+                return;
+            }
+
+            this.timer = new DispatcherTimer();
+            timer.Interval = TimeSpan.FromMilliseconds(ms);
+            timer.Tick += (s, e) => 
+            {
+                this.stop_click(null, null);
+                this.timer.Stop();
+                this.timer = null;
+            };
+            timer.Start();
         }
     }
 }
